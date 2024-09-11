@@ -20,8 +20,6 @@ const permissions = require('../permissions')
 const emitter = require('../emitter')
 const xss = require('xss')
 const path = require('path')
-const settingsUtil = require("../settings/settingsUtil");
-const pkg = require("../../package");
 
 const accountsController = {}
 
@@ -39,47 +37,28 @@ function handleError (res, err) {
 
 accountsController.signup = function (req, res) {
   const marked = require('marked')
+  const settings = require('../models/setting')
+  settings.getSettingByName('allowUserRegistration:enable', function (err, setting) {
+    if (err) return handleError(res, err)
+    if (setting && setting.value === true) {
+      settings.getSettingByName('legal:privacypolicy', function (err, privacyPolicy) {
+        if (err) return handleError(res, err)
 
-  const settingsUtil = require('../settings/settingsUtil')
-  settingsUtil.getSettings(function (err, s) {
-    if (err) throw new Error(err)
-    const settings = s.data.settings
+        const content = {}
+        content.title = 'Create Account'
+        content.layout = false
+        content.data = {}
 
-    const allowUserRegistration = (settings.allowUserRegistration.value === true)
+        if (privacyPolicy === null || _.isUndefined(privacyPolicy.value)) {
+          content.data.privacyPolicy = 'No Privacy Policy has been set.'
+        } else {
+          content.data.privacyPolicy = xss(marked.parse(privacyPolicy.value))
+        }
 
-    if (allowUserRegistration) {
-      const content = {}
-      content.title = 'Create Account'
-      content.layout = false
-      content.data = {}
-
-      const privacyPolicy = settings.privacyPolicy
-
-      content.siteTitle = settings.siteTitle.value
-
-      content.allowUserRegistration = allowUserRegistration
-      content.mailerEnabled = settings.mailerEnabled.value
-
-      content.colorPrimary = settings.colorPrimary.value
-      content.colorSecondary = settings.colorSecondary.value
-      content.colorTertiary = settings.colorTertiary.value
-
-      content.pageLogo = '/img/defaultLogoDark.png'
-      if (settings.hasCustomPageLogo.value && settings.customPageLogoFilename.value.length > 0) {
-        content.pageLogo = '/assets/' + settings.customPageLogoFilename.value
-      }
-
-      content.bottom = 'Trudesk v' + pkg.version
-
-      if (privacyPolicy === null || _.isUndefined(privacyPolicy.value)) {
-        content.data.privacyPolicy = 'No Privacy Policy has been set.'
-      } else {
-        content.data.privacyPolicy = xss(marked.parse(privacyPolicy.value))
-      }
-
-      return res.render('pub_signup', content)
+        return res.render('pub_signup', content)
+      })
     } else {
-      res.redirect('/')
+      return res.redirect('/')
     }
   })
 }
